@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>My Expenses</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #0a0a0a; color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; min-height: 100vh; }
+  body { padding: 16px 16px calc(140px + env(safe-area-inset-bottom)) 16px; max-width: 720px; margin: 0 auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-top: env(safe-area-inset-top); }
+  h1 { font-size: 20px; font-weight: 600; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #888; display: inline-block; margin-right: 6px; }
+  .sync-dot.ok { background: #4ade80; }
+  .sync-dot.err { background: #f87171; }
+  .sync-status { font-size: 12px; color: #888; display: flex; align-items: center; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .card { background: #1a1a1a; border-radius: 12px; padding: 14px; }
+  .card-label { font-size: 12px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card-value { font-size: 22px; font-weight: 600; }
+  .card-value.income { color: #4ade80; }
+  .card-value.expense { color: #f87171; }
+  .card-value.loan { color: #fbbf24; }
+  .section { background: #1a1a1a; border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .section h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #ccc; }
+  .month-row, .cat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #2a2a2a; }
+  .month-row:last-child, .cat-row:last-child { border-bottom: none; }
+  .month-name { font-weight: 500; }
+  .month-nums { display: flex; gap: 10px; font-size: 13px; }
+  .pos { color: #4ade80; } .neg { color: #f87171; } .warn { color: #fbbf24; }
+  .cat-bar { flex: 1; height: 6px; background: #2a2a2a; border-radius: 3px; margin: 0 10px; overflow: hidden; }
+  .cat-fill { height: 100%; background: #3b82f6; }
+  .entry { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2a2a; }
+  .entry:last-child { border-bottom: none; }
+  .entry-left { flex: 1; min-width: 0; }
+  .entry-desc { font-size: 14px; font-weight: 500; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entry-meta { font-size: 12px; color: #888; }
+  .entry-amount { font-size: 14px; font-weight: 600; margin-left: 10px; white-space: nowrap; }
+  .entry-del { background: none; border: none; color: #666; font-size: 18px; padding: 0 0 0 10px; cursor: pointer; }
+  .entry-btn { background: #2a2a2a; border: none; color: #4ade80; font-size: 11px; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+  .entry-btn:active { background: #333; }
+  .empty { color: #666; font-size: 13px; text-align: center; padding: 16px 0; }
+  .loan-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid #2a2a2a; align-items: center; }
+  .loan-item:last-child { border-bottom: none; }
+  .loan-name { font-size: 14px; font-weight: 500; }
+  .loan-meta { font-size: 12px; color: #888; }
+  .loan-amount { font-size: 15px; font-weight: 600; text-align: right; }
+  .loan-status { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; margin-left: 6px; }
+  .loan-status.pending { background: #422a06; color: #fbbf24; }
+  .loan-status.returned { background: #0a2e1a; color: #4ade80; }
+  .loan-status.overdue { background: #3a0a0a; color: #f87171; }
+  .loan-actions { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 6px; }
+  .fab-group { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; align-items: flex-end; }
+  .fab { width: 54px; height: 54px; border-radius: 50%; color: white; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.4); font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .fab:active { transform: scale(0.95); }
+  .fab-expense { background: #ef4444; font-size: 26px; }
+  .fab-income { background: #10b981; font-size: 18px; }
+  .fab-loan { background: #f59e0b; font-size: 18px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .btn { background: #2a2a2a; color: #f5f5f5; border: none; padding: 8px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  .btn:active { background: #333; }
+  .btn-danger { color: #f87171; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+  .modal.open { display: flex; }
+  .modal-inner { background: #1a1a1a; width: 100%; max-width: 500px; border-radius: 16px 16px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)) 20px; max-height: 90vh; overflow-y: auto; }
+  .modal-inner h3 { font-size: 16px; margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+  input, select { width: 100%; background: #2a2a2a; border: 1px solid #333; color: #f5f5f5; padding: 10px 12px; border-radius: 8px; font-size: 15px; font-family: inherit; }
+  input:focus, select:focus { outline: none; border-color: #3b82f6; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .btn-primary { color: white; flex: 1; padding: 12px; font-size: 15px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer; }
+  .btn-primary.expense { background: #ef4444; }
+  .btn-primary.income { background: #10b981; }
+  .btn-primary.loan { background: #f59e0b; }
+  .btn-ghost { background: transparent; color: #888; padding: 12px 16px; border: none; cursor: pointer; }
+  .setup { background: #1a1a1a; border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #333; }
+  .setup h2 { font-size: 16px; margin-bottom: 8px; }
+  .setup p { font-size: 13px; color: #aaa; margin-bottom: 10px; line-height: 1.5; }
+  textarea { width: 100%; background: #0a0a0a; color: #4ade80; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 8px; border: 1px solid #333; height: 120px; resize: vertical; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; background: #1a1a1a; padding: 4px; border-radius: 10px; }
+  .tab { flex: 1; background: transparent; color: #888; border: none; padding: 8px 10px; font-size: 13px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+  .tab.active { background: #2a2a2a; color: #fff; }
+  .type-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-right: 6px; letter-spacing: 0.3px; }
+  .type-badge.expense { background: #3a0a0a; color: #f87171; }
+  .type-badge.income { background: #0a2e1a; color: #4ade80; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>My Expenses</h1>
+  <div class="sync-status"><span class="sync-dot" id="sync-dot"></span><span id="sync-text">Local only</span></div>
+</div>
+
+<div id="setup-panel" class="setup" style="display: none;">
+  <h2>Cloud sync (Firebase config)</h2>
+  <p>Paste your Firebase config JSON. Data will sync across all your devices.</p>
+  <textarea id="firebase-config" placeholder='{"apiKey":"...","projectId":"..."}'></textarea>
+  <div style="margin-top: 10px; display: flex; gap: 8px;">
+    <button class="btn-primary income" id="save-config">Save and connect</button>
+    <button class="btn btn-ghost" id="skip-config">Close</button>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="card-label">Income</div><div class="card-value income" id="stat-income">$0.00</div></div>
+  <div class="card"><div class="card-label">Expenses</div><div class="card-value expense" id="stat-expense">$0.00</div></div>
+  <div class="card"><div class="card-label">Savings</div><div class="card-value" id="stat-savings">$0.00</div></div>
+  <div class="card"><div class="card-label">Lent (pending)</div><div class="card-value loan" id="stat-loan">$0.00</div></div>
+</div>
+
+<div class="toolbar">
+  <button class="btn" id="export-btn">Export Excel</button>
+  <button class="btn" id="csv-btn">Export CSV</button>
+  <button class="btn" id="config-btn">Cloud sync</button>
+  <button class="btn btn-danger" id="clear-btn">Clear all</button>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="entries">Transactions</button>
+  <button class="tab" data-tab="loans">Loans</button>
+  <button class="tab" data-tab="summary">Summary</button>
+</div>
+
+<div id="view-entries">
+  <div class="section">
+    <h2>All transactions</h2>
+    <div id="entries-list"></div>
+  </div>
+</div>
+
+<div id="view-loans" style="display:none;">
+  <div class="section">
+    <h2>Money I lent out</h2>
+    <div id="loans-list"></div>
+  </div>
+</div>
+
+<div id="view-summary" style="display:none;">
+  <div class="section">
+    <h2>Monthly breakdown</h2>
+    <div id="monthly-list"></div>
+  </div>
+  <div class="section">
+    <h2>By category (this month)</h2>
+    <div id="category-list"></div>
+  </div>
+</div>
+
+<div class="fab-group">
+  <button class="fab fab-loan" id="fab-loan" title="Lend money">Lend</button>
+  <button class="fab fab-income" id="fab-income" title="Add income">+ $</button>
+  <button class="fab fab-expense" id="fab-expense" title="Add expense">+</button>
+</div>
+
+<div class="modal" id="modal-tx">
+  <div class="modal-inner">
+    <h3 id="tx-title">Add expense</h3>
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="tx-desc" placeholder="e.g. lunch at canteen" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Amount</label>
+      <input type="number" id="tx-amount" placeholder="0.00" step="0.01" inputmode="decimal" />
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="tx-category"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="tx-cancel">Cancel</button>
+      <button class="btn-primary expense" id="tx-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal-loan">
+  <div class="modal-inner">
+    <h3>Lend money</h3>
+    <div class="field">
+      <label>Who did you lend to?</label>
+      <input type="text" id="loan-name" placeholder="e.g. Mengkea" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label>Amount</label>
+      <input type="number" id="loan-amount" placeholder="0.00" step="0.01" inputmode="decimal" />
+    </div>
+    <div class="field">
+      <label>Expected return date (optional)</label>
+      <input type="date" id="loan-due" />
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="loan-note" placeholder="e.g. for tuition fee" autocomplete="off" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="loan-cancel">Cancel</button>
+      <button class="btn-primary loan" id="loan-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const $ = id => document.getElementById(id);
+const fmt = n => '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const LOCAL_TX = 'expenses_tx_v2';
+const LOCAL_LOAN = 'expenses_loans_v2';
+const CONFIG_KEY = 'firebase_config_v1';
+const EXPENSE_CATS = ['Food', 'Transport', 'Bills', 'Shopping', 'Entertainment', 'Health', 'Education', 'Other'];
+const INCOME_CATS = ['Salary', 'Freelance', 'Gift', 'Bonus', 'Refund', 'Other'];
+
+let txs = [];
+let loans = [];
+let db = null, txCol = null, loanCol = null;
+let unsubTx = null, unsubLoan = null;
+let currentType = 'expense';
+
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+         ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function loadLocal() {
+  try { txs = JSON.parse(localStorage.getItem(LOCAL_TX) || '[]'); } catch (e) { txs = []; }
+  try { loans = JSON.parse(localStorage.getItem(LOCAL_LOAN) || '[]'); } catch (e) { loans = []; }
+
+  const oldRaw = localStorage.getItem('expenses_local_v1');
+  if (oldRaw && txs.length === 0) {
+    try {
+      const old = JSON.parse(oldRaw);
+      txs = old.map(e => ({
+        id: String(e.id || Date.now()),
+        type: e.category === 'Income' ? 'income' : 'expense',
+        desc: e.desc,
+        amount: Number(e.amount),
+        category: e.category === 'Income' ? 'Salary' : e.category,
+        createdAt: e.date ? new Date(e.date + 'T12:00:00').toISOString() : new Date().toISOString()
+      }));
+      saveLocalTx();
+    } catch (err) {}
+  }
+}
+function saveLocalTx() { localStorage.setItem(LOCAL_TX, JSON.stringify(txs)); }
+function saveLocalLoan() { localStorage.setItem(LOCAL_LOAN, JSON.stringify(loans)); }
+
+async function initFirebase(config) {
+  try {
+    const app = initializeApp(config);
+    db = getFirestore(app);
+    txCol = collection(db, 'transactions');
+    loanCol = collection(db, 'loans');
+
+    const existingTx = await getDocs(txCol);
+    if (existingTx.empty && txs.length > 0) {
+      const batch = writeBatch(db);
+      txs.forEach(t => batch.set(doc(txCol), {
+        type: t.type, desc: t.desc, amount: t.amount, category: t.category, createdAt: t.createdAt
+      }));
+      await batch.commit();
+    }
+    const existingLoan = await getDocs(loanCol);
+    if (existingLoan.empty && loans.length > 0) {
+      const batch = writeBatch(db);
+      loans.forEach(l => batch.set(doc(loanCol), {
+        name: l.name, amount: l.amount, note: l.note || '', dueDate: l.dueDate || '',
+        status: l.status, createdAt: l.createdAt, returnedAt: l.returnedAt || ''
+      }));
+      await batch.commit();
+    }
+
+    unsubTx = onSnapshot(txCol, snap => {
+      txs = [];
+      snap.forEach(d => txs.push({ id: d.id, ...d.data() }));
+      render();
+      setSyncStatus('ok', 'Synced');
+    }, err => { setSyncStatus('err', 'Tx sync error'); console.error(err); });
+
+    unsubLoan = onSnapshot(loanCol, snap => {
+      loans = [];
+      snap.forEach(d => loans.push({ id: d.id, ...d.data() }));
+      render();
+    }, err => { setSyncStatus('err', 'Loan sync error'); console.error(err); });
+
+    setSyncStatus('ok', 'Connecting...');
+    return true;
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('err', 'Connection failed');
+    return false;
+  }
+}
+
+function setSyncStatus(state, text) {
+  $('sync-dot').className = 'sync-dot' + (state === 'ok' ? ' ok' : state === 'err' ? ' err' : '');
+  $('sync-text').textContent = text;
+}
+
+async function addTx(entry) {
+  const payload = { ...entry, createdAt: new Date().toISOString() };
+  if (txCol) await addDoc(txCol, payload);
+  else { txs.push({ ...payload, id: String(Date.now()) }); saveLocalTx(); render(); }
+}
+async function deleteTx(id) {
+  if (txCol) await deleteDoc(doc(txCol, id));
+  else { txs = txs.filter(t => t.id !== id); saveLocalTx(); render(); }
+}
+async function addLoan(entry) {
+  const payload = { ...entry, status: 'pending', createdAt: new Date().toISOString(), returnedAt: '' };
+  if (loanCol) await addDoc(loanCol, payload);
+  else { loans.push({ ...payload, id: String(Date.now()) }); saveLocalLoan(); render(); }
+}
+async function markReturned(id) {
+  const now = new Date().toISOString();
+  if (loanCol) await updateDoc(doc(loanCol, id), { status: 'returned', returnedAt: now });
+  else {
+    const l = loans.find(x => x.id === id);
+    if (l) { l.status = 'returned'; l.returnedAt = now; saveLocalLoan(); render(); }
+  }
+}
+async function deleteLoan(id) {
+  if (loanCol) await deleteDoc(doc(loanCol, id));
+  else { loans = loans.filter(l => l.id !== id); saveLocalLoan(); render(); }
+}
+async function clearAll() {
+  if (txCol) {
+    const snap = await getDocs(txCol);
+    const batch = writeBatch(db);
+    snap.forEach(d => batch.delete(d.ref));
+    const snap2 = await getDocs(loanCol);
+    snap2.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  } else {
+    txs = []; loans = []; saveLocalTx(); saveLocalLoan(); render();
+  }
+}
+
+function render() {
+  let income = 0, expense = 0;
+  const byMonth = {};
+  const byCat = {};
+  const now = new Date();
+  const thisMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+  txs.forEach(t => {
+    const amt = Number(t.amount);
+    const mk = (t.createdAt || '').slice(0, 7);
+    if (!mk) return;
+    byMonth[mk] = byMonth[mk] || { income: 0, expense: 0 };
+    if (t.type === 'income') {
+      income += amt;
+      byMonth[mk].income += amt;
+    } else {
+      expense += amt;
+      byMonth[mk].expense += amt;
+      if (mk === thisMonth) {
+        byCat[t.category] = (byCat[t.category] || 0) + amt;
+      }
+    }
+  });
+
+  let lentPending = 0;
+  loans.forEach(l => { if (l.status === 'pending') lentPending += Number(l.amount); });
+
+  $('stat-income').textContent = fmt(income);
+  $('stat-expense').textContent = fmt(expense);
+  const sav = income - expense;
+  const se = $('stat-savings');
+  se.textContent = fmt(sav);
+  se.style.color = sav >= 0 ? '#4ade80' : '#f87171';
+  $('stat-loan').textContent = fmt(lentPending);
+
+  const ml = $('monthly-list');
+  const mks = Object.keys(byMonth).sort().reverse();
+  if (mks.length === 0) {
+    ml.innerHTML = '<div class="empty">No data yet</div>';
+  } else {
+    ml.innerHTML = mks.map(k => {
+      const m = byMonth[k];
+      const net = m.income - m.expense;
+      const label = new Date(k + '-01').toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      return `<div class="month-row">
+        <div class="month-name">${label}</div>
+        <div class="month-nums">
+          <span class="pos">+${fmt(m.income)}</span>
+          <span class="neg">-${fmt(m.expense)}</span>
+          <span class="${net >= 0 ? 'pos' : 'neg'}" style="font-weight:600;">${fmt(net)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  const cl = $('category-list');
+  const cks = Object.keys(byCat).sort((a, b) => byCat[b] - byCat[a]);
+  if (cks.length === 0) {
+    cl.innerHTML = '<div class="empty">No expenses this month</div>';
+  } else {
+    const max = Math.max(...cks.map(k => byCat[k]));
+    cl.innerHTML = cks.map(k => {
+      const pct = (byCat[k] / max) * 100;
+      return `<div class="cat-row">
+        <div style="min-width: 80px;">${escape(k)}</div>
+        <div class="cat-bar"><div class="cat-fill" style="width:${pct}%"></div></div>
+        <div style="min-width: 80px; text-align: right;">${fmt(byCat[k])}</div>
+      </div>`;
+    }).join('');
+  }
+
+  const el = $('entries-list');
+  if (txs.length === 0) {
+    el.innerHTML = '<div class="empty">Tap a button below to add your first entry</div>';
+  } else {
+    const sorted = [...txs].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    el.innerHTML = sorted.map(t => {
+      const isInc = t.type === 'income';
+      return `<div class="entry">
+        <div class="entry-left">
+          <div class="entry-desc"><span class="type-badge ${isInc?'income':'expense'}">${isInc?'IN':'EX'}</span>${escape(t.desc)}</div>
+          <div class="entry-meta">${fmtDateTime(t.createdAt)} · ${escape(t.category || '')}</div>
+        </div>
+        <div class="entry-amount ${isInc ? 'pos' : 'neg'}">${isInc ? '+' : '-'}${fmt(t.amount)}</div>
+        <button class="entry-del" data-del-tx="${t.id}">×</button>
+      </div>`;
+    }).join('');
+    el.querySelectorAll('[data-del-tx]').forEach(b => {
+      b.addEventListener('click', () => { if (confirm('Delete this transaction?')) deleteTx(b.dataset.delTx); });
+    });
+  }
+
+  const ll = $('loans-list');
+  if (loans.length === 0) {
+    ll.innerHTML = '<div class="empty">No loans tracked yet. Tap the orange Lend button.</div>';
+  } else {
+    const sorted = [...loans].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    ll.innerHTML = sorted.map(l => {
+      const isReturned = l.status === 'returned';
+      const overdue = !isReturned && l.dueDate && l.dueDate < today;
+      const statusClass = isReturned ? 'returned' : (overdue ? 'overdue' : 'pending');
+      const statusText = isReturned ? 'Returned' : (overdue ? 'Overdue' : 'Pending');
+      const dueText = l.dueDate ? ` · Due ${fmtDate(l.dueDate)}` : '';
+      const returnedText = isReturned && l.returnedAt ? ` · Returned ${fmtDate(l.returnedAt)}` : '';
+      return `<div class="loan-item">
+        <div>
+          <div class="loan-name">${escape(l.name)}<span class="loan-status ${statusClass}">${statusText}</span></div>
+          <div class="loan-meta">Lent ${fmtDateTime(l.createdAt)}${dueText}${returnedText}</div>
+          ${l.note ? `<div class="loan-meta">${escape(l.note)}</div>` : ''}
+        </div>
+        <div class="loan-amount ${isReturned ? 'pos' : 'warn'}">${fmt(l.amount)}</div>
+        <div class="loan-actions">
+          ${!isReturned ? `<button class="entry-btn" data-return="${l.id}">Mark returned</button>` : ''}
+          <button class="entry-btn" style="color:#f87171;" data-del-loan="${l.id}">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+    ll.querySelectorAll('[data-return]').forEach(b => {
+      b.addEventListener('click', () => { if (confirm('Mark this loan as returned?')) markReturned(b.dataset.return); });
+    });
+    ll.querySelectorAll('[data-del-loan]').forEach(b => {
+      b.addEventListener('click', () => { if (confirm('Delete this loan record?')) deleteLoan(b.dataset.delLoan); });
+    });
+  }
+}
+
+function escape(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fillCategories(type) {
+  const sel = $('tx-category');
+  const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+  sel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function openTxModal(type) {
+  currentType = type;
+  $('tx-title').textContent = type === 'income' ? 'Add income' : 'Add expense';
+  const saveBtn = $('tx-save');
+  saveBtn.className = 'btn-primary ' + (type === 'income' ? 'income' : 'expense');
+  saveBtn.textContent = type === 'income' ? 'Save income' : 'Save expense';
+  fillCategories(type);
+  $('tx-desc').value = '';
+  $('tx-amount').value = '';
+  $('modal-tx').classList.add('open');
+  setTimeout(() => $('tx-desc').focus(), 100);
+}
+
+function openLoanModal() {
+  $('loan-name').value = '';
+  $('loan-amount').value = '';
+  $('loan-due').value = '';
+  $('loan-note').value = '';
+  $('modal-loan').classList.add('open');
+  setTimeout(() => $('loan-name').focus(), 100);
+}
+
+$('fab-expense').addEventListener('click', () => openTxModal('expense'));
+$('fab-income').addEventListener('click', () => openTxModal('income'));
+$('fab-loan').addEventListener('click', () => openLoanModal());
+
+$('tx-cancel').addEventListener('click', () => $('modal-tx').classList.remove('open'));
+$('loan-cancel').addEventListener('click', () => $('modal-loan').classList.remove('open'));
+$('modal-tx').addEventListener('click', e => { if (e.target.id === 'modal-tx') $('modal-tx').classList.remove('open'); });
+$('modal-loan').addEventListener('click', e => { if (e.target.id === 'modal-loan') $('modal-loan').classList.remove('open'); });
+
+$('tx-save').addEventListener('click', async () => {
+  const desc = $('tx-desc').value.trim();
+  const amount = parseFloat($('tx-amount').value);
+  const category = $('tx-category').value;
+  if (!desc || !amount || amount <= 0) return alert('Fill description and amount');
+  await addTx({ type: currentType, desc, amount, category });
+  $('modal-tx').classList.remove('open');
+});
+
+$('loan-save').addEventListener('click', async () => {
+  const name = $('loan-name').value.trim();
+  const amount = parseFloat($('loan-amount').value);
+  const dueDate = $('loan-due').value;
+  const note = $('loan-note').value.trim();
+  if (!name || !amount || amount <= 0) return alert('Fill name and amount');
+  await addLoan({ name, amount, dueDate, note });
+  $('modal-loan').classList.remove('open');
+});
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const tab = t.dataset.tab;
+    $('view-entries').style.display = tab === 'entries' ? 'block' : 'none';
+    $('view-loans').style.display = tab === 'loans' ? 'block' : 'none';
+    $('view-summary').style.display = tab === 'summary' ? 'block' : 'none';
+  });
+});
+
+$('export-btn').addEventListener('click', () => {
+  if (txs.length === 0 && loans.length === 0) return alert('No data');
+  const wb = XLSX.utils.book_new();
+  const sorted = [...txs].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  const rows = sorted.map(t => ({
+    DateTime: t.createdAt ? new Date(t.createdAt).toLocaleString() : '',
+    Type: t.type === 'income' ? 'Income' : 'Expense',
+    Description: t.desc,
+    Category: t.category || '',
+    Amount: Number(t.amount)
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(rows);
+  ws1['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 28 }, { wch: 14 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Transactions');
+
+  const bm = {};
+  txs.forEach(t => {
+    const k = (t.createdAt || '').slice(0, 7);
+    if (!k) return;
+    bm[k] = bm[k] || { income: 0, expense: 0 };
+    if (t.type === 'income') bm[k].income += Number(t.amount);
+    else bm[k].expense += Number(t.amount);
+  });
+  const mRows = Object.keys(bm).sort().map(k => ({
+    Month: k, Income: bm[k].income, Expenses: bm[k].expense, Savings: bm[k].income - bm[k].expense
+  }));
+  const ws2 = XLSX.utils.json_to_sheet(mRows);
+  ws2['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Monthly');
+
+  if (loans.length > 0) {
+    const lRows = loans.map(l => ({
+      Name: l.name,
+      Amount: Number(l.amount),
+      LentOn: l.createdAt ? new Date(l.createdAt).toLocaleString() : '',
+      DueDate: l.dueDate || '',
+      Status: l.status,
+      ReturnedOn: l.returnedAt ? new Date(l.returnedAt).toLocaleString() : '',
+      Note: l.note || ''
+    }));
+    const ws3 = XLSX.utils.json_to_sheet(lRows);
+    ws3['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 20 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Loans');
+  }
+
+  XLSX.writeFile(wb, 'expenses_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+});
+
+$('csv-btn').addEventListener('click', () => {
+  if (txs.length === 0) return alert('No data');
+  const sorted = [...txs].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  const head = 'DateTime,Type,Description,Category,Amount\n';
+  const body = sorted.map(t => {
+    const dt = t.createdAt ? new Date(t.createdAt).toLocaleString() : '';
+    return `"${dt}",${t.type},"${String(t.desc).replace(/"/g,'""')}",${t.category || ''},${Number(t.amount).toFixed(2)}`;
+  }).join('\n');
+  const blob = new Blob([head + body], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'transactions.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('clear-btn').addEventListener('click', async () => {
+  if (txs.length === 0 && loans.length === 0) return;
+  if (confirm('Delete ALL transactions and loans? Cannot be undone.')) await clearAll();
+});
+
+$('config-btn').addEventListener('click', () => {
+  const p = $('setup-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  const saved = localStorage.getItem(CONFIG_KEY);
+  if (saved) $('firebase-config').value = saved;
+});
+$('skip-config').addEventListener('click', () => { $('setup-panel').style.display = 'none'; });
+$('save-config').addEventListener('click', async () => {
+  const raw = $('firebase-config').value.trim();
+  if (!raw) return alert('Paste your Firebase config first');
+  try {
+    const cfg = JSON.parse(raw);
+    localStorage.setItem(CONFIG_KEY, raw);
+    if (unsubTx) unsubTx();
+    if (unsubLoan) unsubLoan();
+    const ok = await initFirebase(cfg);
+    if (ok) { $('setup-panel').style.display = 'none'; alert('Cloud sync enabled!'); }
+  } catch (e) { alert('Invalid JSON.'); }
+});
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+loadLocal();
+render();
+const savedConfig = localStorage.getItem(CONFIG_KEY);
+if (savedConfig) {
+  try { initFirebase(JSON.parse(savedConfig)); } catch (e) { setSyncStatus('err', 'Config error'); }
+} else { setSyncStatus('', 'Local only'); }
+</script>
+</body>
+</html>
